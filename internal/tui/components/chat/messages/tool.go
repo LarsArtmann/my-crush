@@ -123,6 +123,10 @@ func NewToolCallCmp(parentMessageID string, tc message.ToolCall, permissions per
 		opt(m)
 	}
 	t := styles.CurrentTheme()
+
+	// Default timeout for tool animations - 30 seconds to prevent infinite spinning
+	const defaultTimeout = 30 * time.Second
+
 	m.anim = anim.New(anim.Settings{
 		Size:        15,
 		Label:       "Working",
@@ -130,6 +134,7 @@ func NewToolCallCmp(parentMessageID string, tc message.ToolCall, permissions per
 		GradColorB:  t.Secondary,
 		LabelColor:  t.FgBase,
 		CycleColors: true,
+		Timeout:     defaultTimeout,
 	})
 	if m.isNested {
 		m.anim = anim.New(anim.Settings{
@@ -137,6 +142,7 @@ func NewToolCallCmp(parentMessageID string, tc message.ToolCall, permissions per
 			GradColorA:  t.Primary,
 			GradColorB:  t.Secondary,
 			CycleColors: true,
+			Timeout:     defaultTimeout,
 		})
 	}
 	return m
@@ -153,7 +159,7 @@ func (m *toolCallCmp) Init() tea.Cmd {
 // Manages animation updates for pending tool calls.
 func (m *toolCallCmp) Update(msg tea.Msg) (util.Model, tea.Cmd) {
 	switch msg := msg.(type) {
-	case anim.StepMsg:
+	case anim.StepMsg, anim.TimeoutMsg, anim.CancelMsg:
 		var cmds []tea.Cmd
 		for i, nested := range m.nestedToolCalls {
 			if nested.Spinning() {
@@ -165,6 +171,12 @@ func (m *toolCallCmp) Update(msg tea.Msg) (util.Model, tea.Cmd) {
 		if m.spinning {
 			u, cmd := m.anim.Update(msg)
 			m.anim = u
+
+			// Check if animation stopped due to timeout or cancellation
+			if animInterface, ok := u.(*anim.Anim); ok && animInterface.IsStopped() {
+				m.spinning = false
+			}
+
 			cmds = append(cmds, cmd)
 		}
 		return m, tea.Batch(cmds...)
@@ -195,9 +207,15 @@ func (m *toolCallCmp) View() string {
 
 // State management methods
 
-// SetCancelled marks the tool call as cancelled
+// SetCancelled marks the tool call as cancelled and gracefully stops the animation
 func (m *toolCallCmp) SetCancelled() {
 	m.cancelled = true
+	m.spinning = false
+	// Trigger graceful animation cancellation if animation supports it
+	if animInterface, ok := m.anim.(*anim.Anim); ok {
+		// This will send a cancellation message to stop the animation gracefully
+		m.anim.Update(anim.CancelMsg{ID: animInterface.ID()})
+	}
 }
 
 func (m *toolCallCmp) copyTool() tea.Cmd {
@@ -666,10 +684,15 @@ func (m *toolCallCmp) ParentMessageID() string {
 	return m.parentMessageID
 }
 
-// SetToolResult updates the tool result and stops the spinning animation
+// SetToolResult updates the tool result and gracefully stops the spinning animation
 func (m *toolCallCmp) SetToolResult(result message.ToolResult) {
 	m.result = result
 	m.spinning = false
+	// Trigger graceful animation cancellation if animation supports it
+	if animInterface, ok := m.anim.(*anim.Anim); ok {
+		// This will send a cancellation message to stop the animation gracefully
+		m.anim.Update(anim.CancelMsg{ID: animInterface.ID()})
+	}
 }
 
 // GetToolCall returns the current tool call data

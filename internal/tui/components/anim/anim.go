@@ -2,6 +2,7 @@
 package anim
 
 import (
+	"context"
 	"fmt"
 	"image/color"
 	"math/rand/v2"
@@ -53,7 +54,18 @@ var (
 
 var (
 	availableRunes = []rune("0123456789abcdefABCDEF~!@#$£€%^&*()+=_")
-	ellipsisFrames = []string{".", "..", "...", ""}
+	// Enhanced ellipsis frames with smooth transitions and fading effects
+	ellipsisFrames = []string{
+		".",      // Single dot
+		"..",     // Two dots
+		"...",    // Three dots
+		"... ",   // Three dots with space (breathing effect)
+		"...  ",  // Three dots with more space
+		" ...",   // Leading space with dots
+		"  ...",  // More leading space
+		"   ...", // Even more leading space
+		"...",    // Back to three dots
+	}
 )
 
 // Internal ID management. Used during animating to ensure that frame messages
@@ -72,6 +84,7 @@ type animCache struct {
 	labelWidth     int
 	label          []string
 	ellipsisFrames []string
+	ellipsisSpeed  int
 }
 
 var animCacheMap = csync.NewMap[string, *animCache]()
@@ -79,22 +92,30 @@ var animCacheMap = csync.NewMap[string, *animCache]()
 // settingsHash creates a hash key for the settings to use for caching
 func settingsHash(opts Settings) string {
 	h := xxh3.New()
-	fmt.Fprintf(h, "%d-%s-%v-%v-%v-%t",
-		opts.Size, opts.Label, opts.LabelColor, opts.GradColorA, opts.GradColorB, opts.CycleColors)
+	fmt.Fprintf(h, "%d-%s-%v-%v-%v-%t-%d-%d",
+		opts.Size, opts.Label, opts.LabelColor, opts.GradColorA, opts.GradColorB, opts.CycleColors, opts.Timeout, opts.EllipsisSpeed)
 	return fmt.Sprintf("%x", h.Sum(nil))
 }
 
 // StepMsg is a message type used to trigger the next step in the animation.
-type StepMsg struct{ id int }
+type StepMsg struct{ ID int }
+
+// TimeoutMsg is a message that indicates the animation has timed out.
+type TimeoutMsg struct{ ID int }
+
+// CancelMsg is a message that cancels the animation.
+type CancelMsg struct{ ID int }
 
 // Settings defines settings for the animation.
 type Settings struct {
-	Size        int
-	Label       string
-	LabelColor  color.Color
-	GradColorA  color.Color
-	GradColorB  color.Color
-	CycleColors bool
+	Size          int
+	Label         string
+	LabelColor    color.Color
+	GradColorA    color.Color
+	GradColorB    color.Color
+	CycleColors   bool
+	Timeout       time.Duration // Auto-cancel after this duration
+	EllipsisSpeed int           // Custom ellipsis animation speed (frames)
 }
 
 // Default settings.
@@ -116,6 +137,10 @@ type Anim struct {
 	ellipsisStep     atomic.Int64         // current ellipsis frame step
 	ellipsisFrames   *csync.Slice[string] // ellipsis animation frames
 	id               int
+	timeout          time.Duration
+	ellipsisSpeed    int // custom ellipsis speed
+	ctx              context.Context
+	cancel           context.CancelFunc
 }
 
 // New creates a new Anim instance with the specified width and label.
@@ -139,6 +164,11 @@ func New(opts Settings) *Anim {
 	a.startTime = time.Now()
 	a.cyclingCharWidth = opts.Size
 	a.labelColor = opts.LabelColor
+	a.timeout = opts.Timeout
+	a.ellipsisSpeed = opts.EllipsisSpeed
+	if a.ellipsisSpeed == 0 {
+		a.ellipsisSpeed = ellipsisAnimSpeed // Use default if not specified
+	}
 
 	// Check cache first
 	cacheKey := settingsHash(opts)
@@ -152,6 +182,7 @@ func New(opts Settings) *Anim {
 		a.ellipsisFrames = csync.NewSliceFrom(cached.ellipsisFrames)
 		a.initialFrames = cached.initialFrames
 		a.cyclingFrames = cached.cyclingFrames
+		a.ellipsisSpeed = cached.ellipsisSpeed
 	} else {
 		// Generate new values and cache them
 		a.labelWidth = lipgloss.Width(opts.Label)
@@ -241,8 +272,16 @@ func New(opts Settings) *Anim {
 			labelWidth:     a.labelWidth,
 			label:          labelSlice,
 			ellipsisFrames: ellipsisSlice,
+			ellipsisSpeed:  a.ellipsisSpeed,
 		}
 		animCacheMap.Set(cacheKey, cached)
+	}
+
+	// Create context for cancellation
+	if opts.Timeout > 0 {
+		a.ctx, a.cancel = context.WithTimeout(context.Background(), opts.Timeout)
+	} else {
+		a.ctx, a.cancel = context.WithCancel(context.Background())
 	}
 
 	// Random assign a birth to each character for a stagged entrance effect.
@@ -320,9 +359,16 @@ func (a *Anim) Init() tea.Cmd {
 
 // Update processes animation steps (or not).
 func (a *Anim) Update(msg tea.Msg) (util.Model, tea.Cmd) {
+	select {
+	case <-a.ctx.Done():
+		// Animation cancelled or timed out
+		return a, nil
+	default:
+	}
+
 	switch msg := msg.(type) {
 	case StepMsg:
-		if msg.id != a.id {
+		if msg.ID != a.id {
 			// Reject messages that are not for this instance.
 			return a, nil
 		}
@@ -333,15 +379,30 @@ func (a *Anim) Update(msg tea.Msg) (util.Model, tea.Cmd) {
 		}
 
 		if a.initialized.Load() && a.labelWidth > 0 {
-			// Manage the ellipsis animation.
+			// Manage the ellipsis animation with custom speed
 			ellipsisStep := a.ellipsisStep.Add(1)
-			if int(ellipsisStep) >= ellipsisAnimSpeed*len(ellipsisFrames) {
+			speedMultiplier := len(ellipsisFrames)
+			if int(ellipsisStep) >= a.ellipsisSpeed*speedMultiplier {
 				a.ellipsisStep.Store(0)
 			}
 		} else if !a.initialized.Load() && time.Since(a.startTime) >= maxBirthOffset {
 			a.initialized.Store(true)
 		}
 		return a, a.Step()
+	case TimeoutMsg:
+		if msg.ID != a.id {
+			return a, nil
+		}
+		// Handle timeout - stop animation
+		a.cancel()
+		return a, nil
+	case CancelMsg:
+		if msg.ID != a.id {
+			return a, nil
+		}
+		// Handle cancellation
+		a.cancel()
+		return a, nil
 	default:
 		return a, nil
 	}
@@ -349,6 +410,13 @@ func (a *Anim) Update(msg tea.Msg) (util.Model, tea.Cmd) {
 
 // View renders the current state of the animation.
 func (a *Anim) View() string {
+	select {
+	case <-a.ctx.Done():
+		// Animation cancelled or timed out - show final state
+		return a.renderFinal()
+	default:
+	}
+
 	var b strings.Builder
 	step := int(a.step.Load())
 	for i := range a.width {
@@ -373,9 +441,35 @@ func (a *Anim) View() string {
 	// have been initialized.
 	if a.initialized.Load() && a.labelWidth > 0 {
 		ellipsisStep := int(a.ellipsisStep.Load())
-		if ellipsisFrame, ok := a.ellipsisFrames.Get(ellipsisStep / ellipsisAnimSpeed); ok {
+		if ellipsisFrame, ok := a.ellipsisFrames.Get(ellipsisStep / a.ellipsisSpeed); ok {
 			b.WriteString(ellipsisFrame)
 		}
+	}
+
+	return b.String()
+}
+
+// renderFinal returns the final state of the animation when cancelled or timed out.
+func (a *Anim) renderFinal() string {
+	var b strings.Builder
+
+	// Show a faded version of the label with stopped ellipsis
+	if a.label != nil {
+		for i := 0; i < a.label.Len(); i++ {
+			if labelChar, ok := a.label.Get(i); ok {
+				// Apply a muted style to indicate stopped state
+				b.WriteString(lipgloss.NewStyle().
+					Foreground(lipgloss.Color("240")). // Muted gray
+					Render(labelChar))
+			}
+		}
+		// Show "..." as final ellipsis state
+		b.WriteString("...")
+	}
+
+	// If no label, show a simple spinner character
+	if a.labelWidth == 0 {
+		b.WriteString("⋮") // Vertical ellipsis to indicate stopped
 	}
 
 	return b.String()
@@ -384,8 +478,35 @@ func (a *Anim) View() string {
 // Step is a command that triggers the next step in the animation.
 func (a *Anim) Step() tea.Cmd {
 	return tea.Tick(time.Second/time.Duration(fps), func(t time.Time) tea.Msg {
-		return StepMsg{id: a.id}
+		select {
+		case <-a.ctx.Done():
+			return TimeoutMsg{ID: a.id}
+		default:
+			return StepMsg{ID: a.id}
+		}
 	})
+}
+
+// Cancel stops the animation gracefully.
+func (a *Anim) Cancel() tea.Cmd {
+	return func() tea.Msg {
+		return CancelMsg{ID: a.id}
+	}
+}
+
+// IsStopped returns whether the animation has been stopped (cancelled or timed out).
+func (a *Anim) IsStopped() bool {
+	select {
+	case <-a.ctx.Done():
+		return true
+	default:
+		return false
+	}
+}
+
+// ID returns the unique identifier for this animation instance.
+func (a *Anim) ID() int {
+	return a.id
 }
 
 // makeGradientRamp() returns a slice of colors blended between the given keys.
