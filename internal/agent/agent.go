@@ -466,14 +466,9 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (*fantasy
 			currentAssistant.AddFinish(message.FinishReasonPermissionDenied, "User denied permission", "")
 		} else {
 			// Use type-safe error handling
-			if err != nil {
-				apiError := crusherrors.FormatAPIError(err)
-				errorTitle, errorDetails := apiError.ToUIString()
-				currentAssistant.AddFinish(message.FinishReasonError, errorTitle, errorDetails)
-			} else {
-				// This should never happen, but if it does, provide a helpful message
-				currentAssistant.AddFinish(message.FinishReasonError, "Internal Error", "An unexpected condition occurred during error processing")
-			}
+			apiError := crusherrors.FormatAPIError(err)
+			errorTitle, errorDetails := apiError.ToUIString()
+			currentAssistant.AddFinish(message.FinishReasonError, errorTitle, errorDetails)
 		}
 		// Note: we use the parent context here because the genCtx has been
 		// cancelled.

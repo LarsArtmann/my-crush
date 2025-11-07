@@ -166,6 +166,8 @@ func coderAgent(r *recorder.Recorder, env fakeEnv, large, small fantasy.Language
 	if err != nil {
 		return nil, err
 	}
+	// Disable provider auto-update for tests to avoid network calls
+	os.Setenv("CRUSH_DISABLE_PROVIDER_AUTO_UPDATE", "1")
 	cfg, err := config.Init(env.workingDir, "", false)
 	if err != nil {
 		return nil, err

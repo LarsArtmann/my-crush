@@ -17,13 +17,18 @@ func Ok[T, E any](value T) Result[T, E] {
 	}
 }
 
-// Err creates an error result
-func Err[T, E any](err E) Result[T, E] {
+// Err creates an error result with inferred error type
+func Err[T any, E any](err E) Result[T, E] {
 	return Result[T, E]{
 		value: *new(T), // Zero value for success type
 		err:   err,
 		isOk: false,
 	}
+}
+
+// ErrFrom creates an error result from an existing result's success type
+func ErrFrom[T any, E any](err E) Result[T, E] {
+	return Err[T, E](err)
 }
 
 // IsSuccess returns true if the result is successful
