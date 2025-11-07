@@ -201,7 +201,16 @@ func (m *messageCmp) renderAssistantMessage() string {
 		errTag := t.S().Base.Padding(0, 1).Background(t.Red).Foreground(t.White).Render("ERROR")
 		truncated := ansi.Truncate(finishedData.Message, m.textWidth()-2-lipgloss.Width(errTag), "...")
 		title := fmt.Sprintf("%s %s", errTag, t.S().Base.Foreground(t.FgHalfMuted).Render(truncated))
-		details := t.S().Base.Foreground(t.FgSubtle).Width(m.textWidth() - 2).Render(finishedData.Details)
+		
+		// Format error details with better styling
+		detailsContent := finishedData.Details
+		if detailsContent != "" {
+			// Add some visual separation and formatting for error details
+			detailsContent = strings.ReplaceAll(detailsContent, "•", "• ")
+			detailsContent = strings.ReplaceAll(detailsContent, "\n•", "\n  •")
+		}
+		
+		details := t.S().Base.Foreground(t.FgSubtle).Width(m.textWidth() - 2).Render(detailsContent)
 		errorContent := fmt.Sprintf("%s\n\n%s", title, details)
 		return m.style().Render(errorContent)
 	}

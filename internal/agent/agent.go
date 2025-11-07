@@ -100,6 +100,125 @@ type SessionAgentOptions struct {
 	Tools                []fantasy.AgentTool
 }
 
+// formatAPIErrorDetails extracts comprehensive error information from API errors
+// Returns a descriptive title and detailed error information for UI display
+func formatAPIErrorDetails(err error) (string, string) {
+	if err == nil {
+		return "API Error", "Unknown error occurred"
+	}
+
+	errStr := err.Error()
+	lowerErr := strings.ToLower(errStr)
+
+	// Extract structured information from the error
+	title := "API Error"
+	var details strings.Builder
+
+	// Add the raw error as the primary detail
+	details.WriteString("Error: ")
+	details.WriteString(errStr)
+	details.WriteString("\n\n")
+
+	// Try to extract additional context
+	switch {
+	case strings.Contains(lowerErr, "unauthorized") || strings.Contains(lowerErr, "authentication") || strings.Contains(lowerErr, "invalid api key"):
+		title = "Authentication Error"
+		details.WriteString("This appears to be an authentication issue. Please check:\n")
+		details.WriteString("• Your API key is valid and not expired\n")
+		details.WriteString("• The API key has sufficient permissions\n")
+		details.WriteString("• You're using the correct provider endpoint\n")
+
+	case strings.Contains(lowerErr, "rate limit") || strings.Contains(lowerErr, "too many requests") || strings.Contains(lowerErr, "quota exceeded"):
+		title = "Rate Limit Exceeded"
+		details.WriteString("You've hit the rate limit. Options:\n")
+		details.WriteString("• Wait a moment before retrying\n")
+		details.WriteString("• Check your usage quota\n")
+		details.WriteString("• Consider upgrading your plan\n")
+
+	case strings.Contains(lowerErr, "timeout") || strings.Contains(lowerErr, "deadline exceeded"):
+		title = "Request Timeout"
+		details.WriteString("The request timed out. This could be due to:\n")
+		details.WriteString("• Slow model response time\n")
+		details.WriteString("• Network connectivity issues\n")
+		details.WriteString("• Server overload\n")
+
+	case strings.Contains(lowerErr, "connection") || strings.Contains(lowerErr, "network"):
+		title = "Network Error"
+		details.WriteString("Network connectivity issue detected:\n")
+		details.WriteString("• Check your internet connection\n")
+		details.WriteString("• Verify the API endpoint is accessible\n")
+		details.WriteString("• Try again in a few moments\n")
+
+	case strings.Contains(lowerErr, "invalid request") || strings.Contains(lowerErr, "bad request"):
+		title = "Invalid Request"
+		details.WriteString("The API request was invalid:\n")
+		details.WriteString("• Check the request parameters\n")
+		details.WriteString("• Verify the model name exists\n")
+		details.WriteString("• Ensure request format is correct\n")
+
+	case strings.Contains(lowerErr, "insufficient credits") || strings.Contains(lowerErr, "billing") || strings.Contains(lowerErr, "payment"):
+		title = "Billing Error"
+		details.WriteString("Billing or payment issue:\n")
+		details.WriteString("• Check your account balance\n")
+		details.WriteString("• Update your payment method\n")
+		details.WriteString("• Verify your subscription is active\n")
+
+	case strings.Contains(lowerErr, "model not found") || strings.Contains(lowerErr, "invalid model"):
+		title = "Model Unavailable"
+		details.WriteString("Model availability issue:\n")
+		details.WriteString("• Verify the model name is correct\n")
+		details.WriteString("• Check if the model is available in your region\n")
+		details.WriteString("• Try a different model\n")
+
+	case strings.Contains(lowerErr, "content policy") || strings.Contains(lowerErr, "content filter") || strings.Contains(lowerErr, "safety"):
+		title = "Content Policy Violation"
+		details.WriteString("Content policy violation:\n")
+		details.WriteString("• Review and modify your prompt\n")
+		details.WriteString("• Avoid restricted content\n")
+		details.WriteString("• Check content guidelines\n")
+
+	case strings.Contains(lowerErr, "token") && (strings.Contains(lowerErr, "exceeded") || strings.Contains(lowerErr, "limit")):
+		title = "Token Limit Exceeded"
+		details.WriteString("Token limit exceeded:\n")
+		details.WriteString("• Shorten your prompt\n")
+		details.WriteString("• Break into smaller requests\n")
+		details.WriteString("• Use a model with higher token limits\n")
+
+	case strings.Contains(lowerErr, "server error") || strings.Contains(lowerErr, "internal error") || strings.Contains(lowerErr, "502") || strings.Contains(lowerErr, "503") || strings.Contains(lowerErr, "500"):
+		title = "Server Error"
+		details.WriteString("Server-side error occurred:\n")
+		details.WriteString("• This is a temporary issue with the API\n")
+		details.WriteString("• Try again in a few minutes\n")
+		details.WriteString("• Check provider status page\n")
+
+	default:
+		// Try to extract HTTP status codes if present
+		if strings.Contains(errStr, "400") {
+			title = "Bad Request"
+		} else if strings.Contains(errStr, "401") {
+			title = "Unauthorized"
+		} else if strings.Contains(errStr, "403") {
+			title = "Forbidden"
+		} else if strings.Contains(errStr, "404") {
+			title = "Not Found"
+		} else if strings.Contains(errStr, "429") {
+			title = "Rate Limited"
+		} else if strings.Contains(errStr, "500") {
+			title = "Internal Server Error"
+		} else if strings.Contains(errStr, "502") {
+			title = "Bad Gateway"
+		} else if strings.Contains(errStr, "503") {
+			title = "Service Unavailable"
+		}
+	}
+
+	// Add timestamp for debugging
+	details.WriteString("\nTimestamp: ")
+	details.WriteString(time.Now().Format("2006-01-02 15:04:05"))
+
+	return title, details.String()
+}
+
 func NewSessionAgent(
 	opts SessionAgentOptions,
 ) SessionAgent {
@@ -464,7 +583,8 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (*fantasy
 		} else if isPermissionErr {
 			currentAssistant.AddFinish(message.FinishReasonPermissionDenied, "User denied permission", "")
 		} else {
-			currentAssistant.AddFinish(message.FinishReasonError, "API Error", err.Error())
+			errorTitle, errorDetails := formatAPIErrorDetails(err)
+			currentAssistant.AddFinish(message.FinishReasonError, errorTitle, errorDetails)
 		}
 		// Note: we use the parent context here because the genCtx has been
 		// cancelled.
