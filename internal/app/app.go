@@ -13,8 +13,9 @@ import (
 	"sync"
 	"time"
 
+	tea "charm.land/bubbletea/v2"
 	"charm.land/fantasy"
-	tea "github.com/charmbracelet/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/crush/internal/agent"
 	"github.com/charmbracelet/crush/internal/agent/tools/mcp"
 	"github.com/charmbracelet/crush/internal/config"
@@ -28,10 +29,10 @@ import (
 	"github.com/charmbracelet/crush/internal/permission"
 	"github.com/charmbracelet/crush/internal/pubsub"
 	"github.com/charmbracelet/crush/internal/session"
+	"github.com/charmbracelet/crush/internal/shell"
 	"github.com/charmbracelet/crush/internal/term"
 	"github.com/charmbracelet/crush/internal/tui/components/anim"
 	"github.com/charmbracelet/crush/internal/tui/styles"
-	"github.com/charmbracelet/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/charmbracelet/x/exp/charmtone"
 )
@@ -367,6 +368,9 @@ func (app *App) Shutdown() {
 	if app.AgentCoordinator != nil {
 		app.AgentCoordinator.CancelAll()
 	}
+
+	// Kill all background shells.
+	shell.GetBackgroundShellManager().KillAll()
 
 	// Shutdown all LSP clients.
 	for name, client := range app.LSPClients.Seq2() {
