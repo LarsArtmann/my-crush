@@ -5,9 +5,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/v2/key"
-	"github.com/charmbracelet/bubbles/v2/spinner"
-	tea "github.com/charmbracelet/bubbletea/v2"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/spinner"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/catwalk/pkg/catwalk"
 	"github.com/charmbracelet/crush/internal/agent"
 	"github.com/charmbracelet/crush/internal/config"
@@ -23,7 +24,6 @@ import (
 	"github.com/charmbracelet/crush/internal/tui/styles"
 	"github.com/charmbracelet/crush/internal/tui/util"
 	"github.com/charmbracelet/crush/internal/version"
-	"github.com/charmbracelet/lipgloss/v2"
 )
 
 type Splash interface {
@@ -331,10 +331,14 @@ func (s *splashCmp) initializeProject() tea.Cmd {
 
 	cmds = append(cmds, util.CmdHandler(OnboardingCompleteMsg{}))
 	if !s.selectedNo {
+		initPrompt, err := agent.InitializePrompt(*config.Get())
+		if err != nil {
+			return util.ReportError(err)
+		}
 		cmds = append(cmds,
 			util.CmdHandler(chat.SessionClearedMsg{}),
 			util.CmdHandler(chat.SendMsg{
-				Text: agent.InitializePrompt(),
+				Text: initPrompt,
 			}),
 		)
 	}
@@ -458,6 +462,7 @@ func (s *splashCmp) View() string {
 		bodyStyle := t.S().Base.Foreground(t.FgMuted)
 		shortcutStyle := t.S().Base.Foreground(t.Success)
 
+		initFile := config.Get().Options.InitializeAs
 		initText := lipgloss.JoinVertical(
 			lipgloss.Left,
 			titleStyle.Render("Would you like to initialize this project?"),
@@ -465,7 +470,7 @@ func (s *splashCmp) View() string {
 			pathStyle.Render(s.cwd()),
 			"",
 			bodyStyle.Render("When I initialize your codebase I examine the project and put the"),
-			bodyStyle.Render("result into a CRUSH.md file which serves as general context."),
+			bodyStyle.Render(fmt.Sprintf("result into an %s file which serves as general context.", initFile)),
 			"",
 			bodyStyle.Render("You can also initialize anytime via ")+shortcutStyle.Render("ctrl+p")+bodyStyle.Render("."),
 			"",
