@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/charmbracelet/catwalk/pkg/catwalk"
 	"github.com/charmbracelet/catwalk/pkg/embedded"
@@ -139,6 +140,33 @@ func loadProviders(autoUpdateDisabled bool, client ProviderClient, path string) 
 		return providers, nil
 	}
 
+	// Check if cache exists and is fresh (not older than 1 hour)
+	checkCacheFreshness := func() (bool, error) {
+		if autoUpdateDisabled {
+			return false, nil // Skip cache check when auto-update is disabled
+		}
+
+		fileInfo, err := os.Stat(path)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return false, nil // No cache file
+			}
+			return false, fmt.Errorf("failed to check cache file: %w", err)
+		}
+
+		// Cache is valid if it's less than 1 hour old
+		cacheAge := time.Since(fileInfo.ModTime())
+		isFresh := cacheAge < time.Hour
+
+		if isFresh {
+			slog.Debug("Provider cache is fresh", "path", path, "age_minutes", cacheAge.Minutes())
+		} else {
+			slog.Debug("Provider cache is stale", "path", path, "age_minutes", cacheAge.Minutes())
+		}
+
+		return isFresh, nil
+	}
+
 	switch {
 	case autoUpdateDisabled:
 		slog.Warn("Providers auto-update is disabled")
@@ -156,6 +184,15 @@ func loadProviders(autoUpdateDisabled bool, client ProviderClient, path string) 
 		return providers, nil
 
 	default:
+		// First check if cache exists and is fresh
+		if isFresh, err := checkCacheFreshness(); err != nil {
+			return nil, err
+		} else if isFresh {
+			slog.Info("Using fresh cached providers", "path", path)
+			return loadProvidersFromCache(path)
+		}
+
+		// Cache is stale or doesn't exist, fetch from Catwalk
 		slog.Info("Fetching providers from Catwalk.", "path", path)
 
 		providers, err := catwalkGetAndSave()
