@@ -99,6 +99,10 @@
         "tools": {
           "$ref": "#/$defs/Tools",
           "description": "Tool configurations"
+        },
+        "memu": {
+          "$ref": "#/$defs/MemUConfig",
+          "description": "MemU memory framework configuration"
         }
       },
       "additionalProperties": false,
@@ -696,6 +700,38 @@
       "required": [
         "ls"
       ]
+    },
+    "MemUConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable MemU memory functionality",
+          "default": false
+        },
+        "data_dir": {
+          "type": "string",
+          "description": "Directory to store memory data (relative to working directory)",
+          "default": ".crush/memory",
+          "examples": [
+            ".crush/memory"
+          ]
+        },
+        "retrieval_mode": {
+          "type": "string",
+          "enum": [
+            "rag",
+            "llm"
+          ],
+          "description": "Memory retrieval mode",
+          "default": "rag",
+          "examples": [
+            "rag",
+            "llm"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
     }
   }
 }

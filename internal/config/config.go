@@ -366,6 +366,13 @@ func (t ToolLs) Limits() (depth, items int) {
 	return ptrValOr(t.MaxDepth, 0), ptrValOr(t.MaxItems, 0)
 }
 
+// MemUConfig holds configuration for MemU memory tools
+type MemUConfig struct {
+	Enabled       bool   `json:"enabled,omitempty" jsonschema:"description=Enable MemU memory functionality,default=false"`
+	DataDir       string `json:"data_dir,omitempty" jsonschema:"description=Directory to store memory data (relative to working directory),default=.crush/memory,example=.crush/memory"`
+	RetrievalMode string `json:"retrieval_mode,omitempty" jsonschema:"description=Memory retrieval mode,enum=rag,enum=llm,default=rag,description=rag: Fast embedding-based retrieval, llm: Semantic understanding retrieval"`
+}
+
 // Config holds the configuration for crush.
 type Config struct {
 	Schema string `json:"$schema,omitempty"`
@@ -387,6 +394,8 @@ type Config struct {
 	Permissions *Permissions `json:"permissions,omitempty" jsonschema:"description=Permission settings for tool usage"`
 
 	Tools Tools `json:"tools,omitzero" jsonschema:"description=Tool configurations"`
+
+	MemU *MemUConfig `json:"memu,omitempty" jsonschema:"description=MemU memory framework configuration"`
 
 	Agents map[string]Agent `json:"-"`
 
@@ -695,6 +704,10 @@ func allToolNames() []string {
 		"glob",
 		"grep",
 		"ls",
+		"memu_memorize",
+		"memu_retrieve",
+		"memu_search",
+		"memu_forget",
 		"sourcegraph",
 		"todos",
 		"view",

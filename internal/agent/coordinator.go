@@ -387,6 +387,11 @@ func (c *coordinator) buildTools(ctx context.Context, agent config.Agent) ([]fan
 		tools.NewWriteTool(c.lspClients, c.permissions, c.history, c.cfg.WorkingDir()),
 	)
 
+	// Add MemU tools if configured
+	if c.cfg.MemU != nil && c.cfg.MemU.Enabled {
+		allTools = append(allTools, tools.NewMemUTool(c.cfg.WorkingDir(), c.permissions, c.cfg.MemU)...)
+	}
+
 	if len(c.cfg.LSP) > 0 {
 		allTools = append(allTools, tools.NewDiagnosticsTool(c.lspClients), tools.NewReferencesTool(c.lspClients))
 	}
