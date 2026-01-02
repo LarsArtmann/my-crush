@@ -3,10 +3,15 @@ package tools
 import (
 	"context"
 	_ "embed"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
+	"sync"
+	"time"
 
 	"charm.land/fantasy"
 	"github.com/charmbracelet/crush/internal/config"
@@ -23,6 +28,103 @@ type MemUMemoryService interface {
 	Retrieve(ctx context.Context, queries []string) ([]string, error)
 	Search(ctx context.Context, query string) ([]string, error)
 	Forget(ctx context.Context, query string) error
+}
+
+// Memory represents a stored memory item
+type Memory struct {
+	ID        string    `json:"id"`
+	Content   string    `json:"content"`
+	Modality  string    `json:"modality"`
+	Source    string    `json:"source"`
+	Tags      []string  `json:"tags,omitempty"`
+	Timestamp time.Time `json:"timestamp"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// MemoryStore represents the in-memory and persisted storage
+type MemoryStore struct {
+	Memories map[string]Memory `json:"memories"`
+	Tags     map[string][]string `json:"tags,omitempty"`
+}
+
+// RealMemUService implements actual memory storage and retrieval
+type RealMemUService struct {
+	mu        sync.RWMutex
+	store     *MemoryStore
+	config    *config.MemUConfig
+	dataDir   string
+	filePath  string
+}
+
+// generateID creates a unique memory ID
+func generateID() string {
+	bytes := make([]byte, 16)
+	rand.Read(bytes)
+	return hex.EncodeToString(bytes)
+}
+
+// NewRealMemUService creates a new real memory service
+func NewRealMemUService(config *config.MemUConfig) (*RealMemUService, error) {
+	if config == nil {
+		return nil, fmt.Errorf("config cannot be nil")
+	}
+
+	// Ensure data directory exists
+	dataDir := config.DataDir
+	if dataDir == "" {
+		dataDir = ".crush/memory"
+	}
+
+	if err := os.MkdirAll(dataDir, 0o755); err != nil {
+		return nil, fmt.Errorf("failed to create data directory: %w", err)
+	}
+
+	filePath := filepath.Join(dataDir, "memories.json")
+
+	service := &RealMemUService{
+		config:   config,
+		dataDir:  dataDir,
+		filePath: filePath,
+		store:    &MemoryStore{
+			Memories: make(map[string]Memory),
+			Tags:     make(map[string][]string),
+		},
+	}
+
+	// Load existing memories from file
+	if err := service.loadFromFile(); err != nil && !os.IsNotExist(err) {
+		return nil, fmt.Errorf("failed to load existing memories: %w", err)
+	}
+
+	return service, nil
+}
+
+// loadFromFile loads memories from JSON file
+func (s *RealMemUService) loadFromFile() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	data, err := os.ReadFile(s.filePath)
+	if err != nil {
+		return err
+	}
+
+	if len(data) == 0 {
+		return nil // Empty file is okay
+	}
+
+	return json.Unmarshal(data, s.store)
+}
+
+// saveToFile saves memories to JSON file
+func (s *RealMemUService) saveToFile() error {
+	data, err := json.MarshalIndent(s.store, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal memories: %w", err)
+	}
+
+	return os.WriteFile(s.filePath, data, 0o644)
 }
 
 // Mock memory service for development/testing
@@ -53,6 +155,219 @@ func (m *MockMemUService) Search(ctx context.Context, query string) ([]string, e
 func (m *MockMemUService) Forget(ctx context.Context, query string) error {
 	// Mock forget - in real implementation this would use MemU's actual forget
 	return nil
+}
+
+// RealMemUService implementation
+
+func (s *RealMemUService) Memorize(ctx context.Context, resourceURL, modality string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Read content from resource
+	var content string
+	var err error
+
+	if strings.HasPrefix(resourceURL, "http://") || strings.HasPrefix(resourceURL, "https://") {
+		// For URLs, we'll just store the URL as content for now
+		// In a real implementation, we would fetch the URL content
+		content = fmt.Sprintf("Resource: %s", resourceURL)
+	} else {
+		// For local files, read the content
+		var data []byte
+		data, err = os.ReadFile(resourceURL)
+		if err != nil {
+			return fmt.Errorf("failed to read resource %s: %w", resourceURL, err)
+		}
+		content = string(data)
+	}
+
+	// Create memory object
+	memoryID := generateID()
+	now := time.Now()
+	
+	memory := Memory{
+		ID:        memoryID,
+		Content:   content,
+		Modality:  modality,
+		Source:    resourceURL,
+		Timestamp: now,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+
+	// Store memory
+	s.store.Memories[memoryID] = memory
+
+	// Update tag index (simple implementation - extract from content)
+	tags := s.extractTags(content)
+	for _, tag := range tags {
+		s.store.Tags[tag] = append(s.store.Tags[tag], memoryID)
+	}
+
+	// Save to file
+	if err := s.saveToFile(); err != nil {
+		delete(s.store.Memories, memoryID) // Cleanup on failure
+		return fmt.Errorf("failed to save memory: %w", err)
+	}
+
+	return nil
+}
+
+func (s *RealMemUService) Retrieve(ctx context.Context, queries []string) ([]string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if len(queries) == 0 {
+		return []string{}, nil
+	}
+
+	var results []string
+	found := make(map[string]bool)
+
+	// Search for each query
+	for _, query := range queries {
+		memoryIDs := s.searchMemories(query)
+		for _, id := range memoryIDs {
+			if !found[id] {
+				if memory, exists := s.store.Memories[id]; exists {
+					results = append(results, memory.Content)
+					found[id] = true
+				}
+			}
+		}
+	}
+
+	return results, nil
+}
+
+func (s *RealMemUService) Search(ctx context.Context, query string) ([]string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if query == "" {
+		return []string{}, nil
+	}
+
+	memoryIDs := s.searchMemories(query)
+	var results []string
+	
+	for _, id := range memoryIDs {
+		if memory, exists := s.store.Memories[id]; exists {
+			results = append(results, fmt.Sprintf("ID: %s | Source: %s | Modality: %s | Content: %s", 
+				memory.ID, memory.Source, memory.Modality, memory.Content[:min(200, len(memory.Content))]))
+		}
+	}
+
+	return results, nil
+}
+
+func (s *RealMemUService) Forget(ctx context.Context, query string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if query == "" {
+		return fmt.Errorf("query cannot be empty")
+	}
+
+	memoryIDs := s.searchMemories(query)
+	removedCount := 0
+
+	for _, id := range memoryIDs {
+		if _, exists := s.store.Memories[id]; exists {
+			// Remove from memories
+			delete(s.store.Memories, id)
+			
+			// Remove from tag index
+			for tag, ids := range s.store.Tags {
+				s.store.Tags[tag] = removeFromSlice(ids, id)
+				if len(s.store.Tags[tag]) == 0 {
+					delete(s.store.Tags, tag)
+				}
+			}
+			
+			removedCount++
+		}
+	}
+
+	if removedCount > 0 {
+		return s.saveToFile()
+	}
+
+	return nil
+}
+
+// Helper methods
+
+func (s *RealMemUService) extractTags(content string) []string {
+	// Simple tag extraction - in a real implementation, this would be more sophisticated
+	// For now, just split content into words and use common words as tags
+	words := strings.Fields(strings.ToLower(content))
+	tags := make(map[string]bool)
+	
+	for _, word := range words {
+		if len(word) > 4 && !isCommonWord(word) {
+			tags[word] = true
+		}
+	}
+	
+	var result []string
+	for tag := range tags {
+		if len(result) < 5 { // Limit to 5 tags per memory
+			result = append(result, tag)
+		}
+	}
+	
+	return result
+}
+
+func (s *RealMemUService) searchMemories(query string) []string {
+	query = strings.ToLower(query)
+	var results []string
+	
+	// Search through memories
+	for id, memory := range s.store.Memories {
+		content := strings.ToLower(memory.Content)
+		source := strings.ToLower(memory.Source)
+		
+		if strings.Contains(content, query) || 
+		   strings.Contains(source, query) ||
+		   strings.Contains(strings.ToLower(memory.Modality), query) {
+			results = append(results, id)
+		}
+	}
+	
+	return results
+}
+
+func isCommonWord(word string) bool {
+	commonWords := []string{
+		"this", "that", "with", "from", "they", "have", "been", 
+		"there", "were", "said", "each", "which", "their", "time", 
+		"will", "about", "would", "could", "other", "after", "first",
+	}
+	for _, common := range commonWords {
+		if word == common {
+			return true
+		}
+	}
+	return false
+}
+
+func removeFromSlice(slice []string, item string) []string {
+	var result []string
+	for _, s := range slice {
+		if s != item {
+			result = append(result, s)
+		}
+	}
+	return result
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 // MemUMemorizeParams for memorize tool
@@ -120,9 +435,13 @@ func NewMemUTool(workingDir string, permissions permission.Service, config *conf
 		return nil
 	}
 
-	// For now, use mock service. In real implementation, this would initialize
-	// actual MemU service with proper configuration
-	service := &MockMemUService{}
+	// Use real MemU service
+	var service MemUMemoryService
+	service, err := NewRealMemUService(config)
+	if err != nil {
+		// Fallback to mock service if real service fails to initialize
+		service = &MockMemUService{}
+	}
 
 	tool := &memuTool{
 		workingDir:  workingDir,

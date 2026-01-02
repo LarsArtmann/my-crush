@@ -704,6 +704,29 @@ func allToolNames() []string {
 		"glob",
 		"grep",
 		"ls",
+		"sourcegraph",
+		"todos",
+		"view",
+		"write",
+	}
+}
+
+func allToolNamesWithMemU() []string {
+	return []string{
+		"agent",
+		"bash",
+		"job_output",
+		"job_kill",
+		"download",
+		"edit",
+		"multiedit",
+		"lsp_diagnostics",
+		"lsp_references",
+		"fetch",
+		"agentic_fetch",
+		"glob",
+		"grep",
+		"ls",
 		"memu_memorize",
 		"memu_retrieve",
 		"memu_search",
@@ -742,7 +765,13 @@ func filterSlice(data []string, mask []string, include bool) []string {
 }
 
 func (c *Config) SetupAgents() {
-	allowedTools := resolveAllowedTools(allToolNames(), c.Options.DisabledTools)
+	// Choose which tool list to use based on MemU configuration
+	toolNames := allToolNames()
+	if c.MemU != nil && c.MemU.Enabled {
+		toolNames = allToolNamesWithMemU()
+	}
+	
+	allowedTools := resolveAllowedTools(toolNames, c.Options.DisabledTools)
 
 	agents := map[string]Agent{
 		AgentCoder: {
