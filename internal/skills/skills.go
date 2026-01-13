@@ -124,8 +124,9 @@ func Discover(paths []string) []*Skill {
 			Follow:  true,
 			ToSlash: fastwalk.DefaultToSlash(),
 		}
-		fastwalk.Walk(&conf, base, func(path string, d os.DirEntry, err error) error {
-			if err != nil {
+		fastwalk.Walk(&conf, base, func(path string, d os.DirEntry, walkErr error) error {
+			//nolint:nilerr // Returning nil means "continue walking"
+			if walkErr != nil {
 				return nil
 			}
 			if d.IsDir() || d.Name() != SkillFileName {

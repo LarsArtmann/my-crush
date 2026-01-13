@@ -88,8 +88,9 @@ func GlobWithDoubleStar(pattern, searchPath string, limit int) ([]string, bool, 
 		ToSlash: fastwalk.DefaultToSlash(),
 		Sort:    fastwalk.SortFilesFirst,
 	}
-	err := fastwalk.Walk(&conf, searchPath, func(path string, d os.DirEntry, err error) error {
-		if err != nil {
+	err := fastwalk.Walk(&conf, searchPath, func(path string, d os.DirEntry, walkErr error) error {
+		//nolint:nilerr // Returning nil means "continue walking"
+		if walkErr != nil {
 			return nil // Skip files we can't access
 		}
 
@@ -112,13 +113,16 @@ func GlobWithDoubleStar(pattern, searchPath string, limit int) ([]string, bool, 
 		relPath = filepath.ToSlash(relPath)
 
 		// Check if path matches the pattern
-		matched, err := doublestar.Match(pattern, relPath)
-		if err != nil || !matched {
+		matched, matchErr := doublestar.Match(pattern, relPath)
+		if matchErr != nil || !matched {
+			//nolint:nilerr // Pattern might not match
 			return nil
 		}
 
-		info, err := d.Info()
-		if err != nil {
+		// Can't get file info
+		info, infoErr := d.Info()
+		if infoErr != nil {
+			//nolint:nilerr // Can't get file info
 			return nil
 		}
 

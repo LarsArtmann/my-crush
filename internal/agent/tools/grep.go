@@ -293,8 +293,9 @@ func searchFilesWithRegex(pattern, rootPath, include string) ([]grepMatch, error
 	// Create walker with gitignore and crushignore support
 	walker := fsext.NewFastGlobWalker(rootPath)
 
-	err = filepath.Walk(rootPath, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
+	err = filepath.Walk(rootPath, func(path string, info os.FileInfo, walkErr error) error {
+		//nolint:nilerr // Returning nil means "continue walking"
+		if walkErr != nil {
 			return nil // Skip errors
 		}
 
@@ -321,8 +322,10 @@ func searchFilesWithRegex(pattern, rootPath, include string) ([]grepMatch, error
 			return nil
 		}
 
-		match, lineNum, charNum, lineText, err := fileContainsPattern(path, regex)
-		if err != nil {
+		//nolint:nilerr // Returning nil means "continue walking"
+		match, lineNum, charNum, lineText, readErr := fileContainsPattern(path, regex)
+		if readErr != nil {
+			//nolint:nilerr // Can't read file
 			return nil // Skip files we can't read
 		}
 

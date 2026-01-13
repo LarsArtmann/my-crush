@@ -219,8 +219,9 @@ func ListDirectory(initialPath string, ignorePatterns []string, depth, limit int
 		MaxDepth: depth,
 	}
 
-	err := fastwalk.Walk(&conf, initialPath, func(path string, d os.DirEntry, err error) error {
-		if err != nil {
+	err := fastwalk.Walk(&conf, initialPath, func(path string, d os.DirEntry, walkErr error) error {
+		//nolint:nilerr // Returning nil means "continue walking"
+		if walkErr != nil {
 			return nil // Skip files we don't have permission to access
 		}
 

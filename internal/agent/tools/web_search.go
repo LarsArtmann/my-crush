@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	_ "embed"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -41,9 +42,9 @@ func NewWebSearchTool(client *http.Client) fantasy.AgentTool {
 				maxResults = 20
 			}
 
-			results, err := searchDuckDuckGo(ctx, client, params.Query, maxResults)
-			if err != nil {
-				return fantasy.NewTextErrorResponse("Failed to search: " + err.Error()), nil
+			results, searchErr := searchDuckDuckGo(ctx, client, params.Query, maxResults)
+			if searchErr != nil {
+				return fantasy.ToolResponse{}, fmt.Errorf("failed to search: %w", searchErr)
 			}
 
 			return fantasy.NewTextResponse(formatSearchResults(results)), nil

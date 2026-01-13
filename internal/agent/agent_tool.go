@@ -71,7 +71,7 @@ func (c *coordinator) agentTool(ctx context.Context) (fantasy.AgentTool, error) 
 			if !ok {
 				return fantasy.ToolResponse{}, errors.New("model provider not configured")
 			}
-			result, err := agent.Run(ctx, SessionAgentCall{
+			result, runErr := agent.Run(ctx, SessionAgentCall{
 				SessionID:        session.ID,
 				Prompt:           params.Prompt,
 				MaxOutputTokens:  maxTokens,
@@ -82,8 +82,8 @@ func (c *coordinator) agentTool(ctx context.Context) (fantasy.AgentTool, error) 
 				FrequencyPenalty: model.ModelCfg.FrequencyPenalty,
 				PresencePenalty:  model.ModelCfg.PresencePenalty,
 			})
-			if err != nil {
-				return fantasy.NewTextErrorResponse("error generating response"), nil
+			if runErr != nil {
+				return fantasy.ToolResponse{}, fmt.Errorf("error generating response: %w", runErr)
 			}
 			updatedSession, err := c.sessions.Get(ctx, session.ID)
 			if err != nil {

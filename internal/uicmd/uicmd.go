@@ -153,8 +153,9 @@ func (l *commandLoader) loadFromSource(source commandSource) ([]Command, error) 
 			return err
 		}
 
-		cmd, err := l.loadCommand(path, source.path, source.prefix)
-		if err != nil {
+		cmd, loadErr := l.loadCommand(path, source.path, source.prefix)
+		//nolint:nilerr // Skip invalid commands
+		if loadErr != nil {
 			return nil // Skip invalid files
 		}
 
