@@ -125,7 +125,7 @@ func Discover(paths []string) []*Skill {
 			ToSlash: fastwalk.DefaultToSlash(),
 		}
 		fastwalk.Walk(&conf, base, func(path string, d os.DirEntry, walkErr error) error {
-			//nolint:nilerr // Returning nil means "continue walking"
+			//nolint:nilerr // Ignore permission errors and unreadable files - skip and continue discovery
 			if walkErr != nil {
 				return nil
 			}

@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
+	"log/slog"
 
 	"charm.land/fantasy"
 
@@ -83,6 +84,7 @@ func (c *coordinator) agentTool(ctx context.Context) (fantasy.AgentTool, error) 
 				PresencePenalty:  model.ModelCfg.PresencePenalty,
 			})
 			if runErr != nil {
+				slog.Debug("Failed to generate agent response", "error", runErr, "session", session.ID)
 				return fantasy.ToolResponse{}, fmt.Errorf("error generating response: %w", runErr)
 			}
 			updatedSession, err := c.sessions.Get(ctx, session.ID)

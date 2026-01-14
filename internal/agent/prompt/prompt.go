@@ -226,6 +226,7 @@ func getGitStatus(ctx context.Context, dir string) (string, error) {
 }
 
 func getGitBranch(ctx context.Context, sh *shell.Shell) (string, error) {
+	//nolint:nilerr // Git errors are non-critical - we just omit branch info if git fails
 	out, _, _ := sh.Exec(ctx, "git branch --show-current 2>/dev/null")
 	out = strings.TrimSpace(out)
 	if out == "" {
@@ -235,6 +236,7 @@ func getGitBranch(ctx context.Context, sh *shell.Shell) (string, error) {
 }
 
 func getGitStatusSummary(ctx context.Context, sh *shell.Shell) (string, error) {
+	//nolint:nilerr // Git errors are non-critical - we show "clean" status if git fails
 	out, _, _ := sh.Exec(ctx, "git status --short 2>/dev/null | head -20")
 	out = strings.TrimSpace(out)
 	if out == "" {
@@ -244,6 +246,7 @@ func getGitStatusSummary(ctx context.Context, sh *shell.Shell) (string, error) {
 }
 
 func getGitRecentCommits(ctx context.Context, sh *shell.Shell) (string, error) {
+	//nolint:nilerr // Git errors are non-critical - we omit recent commits if git fails
 	out, _, _ := sh.Exec(ctx, "git log --oneline -n 3 2>/dev/null")
 	out = strings.TrimSpace(out)
 	if out == "" {

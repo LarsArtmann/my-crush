@@ -4,6 +4,7 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -44,6 +45,7 @@ func NewWebSearchTool(client *http.Client) fantasy.AgentTool {
 
 			results, searchErr := searchDuckDuckGo(ctx, client, params.Query, maxResults)
 			if searchErr != nil {
+				slog.Debug("Web search failed", "error", searchErr, "query", params.Query, "max_results", maxResults)
 				return fantasy.ToolResponse{}, fmt.Errorf("failed to search: %w", searchErr)
 			}
 
