@@ -624,7 +624,7 @@ func (m *sidebarCmp) uptimeBlock() string {
 	uptime := time.Since(m.startTime)
 	formattedUptime := FormatUptime(uptime)
 
-	clockIcon := t.S().Base.Foreground(t.FgSubtle).Render("●")
+	clockIcon := t.S().Base.Foreground(t.FgSubtle).Render(styles.ClockIcon)
 	uptimeText := t.S().Muted.Render(formattedUptime)
 
 	return fmt.Sprintf("%s %s", clockIcon, uptimeText)
