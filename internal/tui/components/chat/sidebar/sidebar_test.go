@@ -172,6 +172,21 @@ func TestUptimeFormatting(t *testing.T) {
 			duration: 48*time.Hour + 15*time.Minute,
 			expected: "48h 15m",
 		},
+		{
+			name:     "Just before 1 day - 23 hours",
+			duration: 23 * time.Hour,
+			expected: "23h",
+		},
+		{
+			name:     "Just after 1 day - 25 hours",
+			duration: 25 * time.Hour,
+			expected: "25h",
+		},
+		{
+			name:     "Very long duration - 100 hours",
+			duration: 100 * time.Hour,
+			expected: "100h",
+		},
 	}
 
 	for _, tt := range tests {
