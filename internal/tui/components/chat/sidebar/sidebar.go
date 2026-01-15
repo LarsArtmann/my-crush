@@ -124,12 +124,26 @@ func (m *sidebarCmp) Update(msg tea.Msg) (util.Model, tea.Cmd) {
 	return m, nil
 }
 
+// FormatUptime formats a duration into a human-readable uptime string.
+// The format is either "Xm" for durations less than an hour,
+// or "Xh Ym" for durations of one hour or more.
+//
+// Examples:
+//   - 30 seconds → "0m"
+//   - 5 minutes   → "5m"
+//   - 1 hour      → "1h"
+//   - 2h 15m     → "2h 15m"
+//   - 48h 30m    → "48h 30m"
 func FormatUptime(duration time.Duration) string {
 	totalMinutes := int(duration.Minutes())
 	hours := totalMinutes / 60
 	minutes := totalMinutes % 60
 
 	if hours > 0 {
+		if minutes == 0 {
+			// Don't show "0m" if hours are present
+			return fmt.Sprintf("%dh", hours)
+		}
 		return fmt.Sprintf("%dh %dm", hours, minutes)
 	}
 	return fmt.Sprintf("%dm", minutes)

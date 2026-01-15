@@ -135,7 +135,7 @@ func TestUptimeFormatting(t *testing.T) {
 		{
 			name:     "1 hour exactly",
 			duration: 1 * time.Hour,
-			expected: "1h 0m",
+			expected: "1h",
 		},
 		{
 			name:     "1 hour 30 minutes",
@@ -145,7 +145,7 @@ func TestUptimeFormatting(t *testing.T) {
 		{
 			name:     "2 hours exactly",
 			duration: 2 * time.Hour,
-			expected: "2h 0m",
+			expected: "2h",
 		},
 		{
 			name:     "2 hours 15 minutes",
@@ -160,7 +160,7 @@ func TestUptimeFormatting(t *testing.T) {
 		{
 			name:     "24 hours exactly",
 			duration: 24 * time.Hour,
-			expected: "24h 0m",
+			expected: "24h",
 		},
 		{
 			name:     "24 hours 30 minutes",
