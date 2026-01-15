@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -57,6 +58,11 @@ type SessionFilesMsg struct {
 	Files []SessionFile
 }
 
+// UptimeTickMsg is a message sent periodically to update the uptime indicator.
+type UptimeTickMsg struct {
+	Time time.Time
+}
+
 type Sidebar interface {
 	util.Model
 	layout.Sizeable
@@ -73,23 +79,29 @@ type sidebarCmp struct {
 	compactMode   bool
 	history       history.Service
 	files         *csync.Map[string, SessionFile]
+	startTime     time.Time
 }
 
 func New(history history.Service, lspClients *csync.Map[string, *lsp.Client], compact bool) Sidebar {
 	return &sidebarCmp{
 		lspClients:  lspClients,
 		history:     history,
-		compactMode: compact,
-		files:       csync.NewMap[string, SessionFile](),
+		compactMode:  compact,
+		files:        csync.NewMap[string, SessionFile](),
+		startTime:    time.Now(),
 	}
 }
 
 func (m *sidebarCmp) Init() tea.Cmd {
-	return nil
+	return tea.Tick(1*time.Minute, func(t time.Time) tea.Msg {
+		return UptimeTickMsg{Time: t}
+	})
 }
 
 func (m *sidebarCmp) Update(msg tea.Msg) (util.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case UptimeTickMsg:
+		return m, nil
 	case SessionFilesMsg:
 		m.files = csync.NewMap[string, SessionFile]()
 		for _, file := range msg.Files {
@@ -109,6 +121,17 @@ func (m *sidebarCmp) Update(msg tea.Msg) (util.Model, tea.Cmd) {
 		}
 	}
 	return m, nil
+}
+
+func FormatUptime(duration time.Duration) string {
+	totalMinutes := int(duration.Minutes())
+	hours := totalMinutes / 60
+	minutes := totalMinutes % 60
+
+	if hours > 0 {
+		return fmt.Sprintf("%dh %dm", hours, minutes)
+	}
+	return fmt.Sprintf("%dm", minutes)
 }
 
 func (m *sidebarCmp) View() string {
@@ -148,6 +171,7 @@ func (m *sidebarCmp) View() string {
 	}
 	parts = append(parts,
 		m.currentModelBlock(),
+		m.uptimeBlock(),
 	)
 
 	// Check if we should use horizontal layout for sections
@@ -593,6 +617,17 @@ func (s *sidebarCmp) currentModelBlock() string {
 		lipgloss.Left,
 		parts...,
 	)
+}
+
+func (m *sidebarCmp) uptimeBlock() string {
+	t := styles.CurrentTheme()
+	uptime := time.Since(m.startTime)
+	formattedUptime := FormatUptime(uptime)
+
+	clockIcon := t.S().Base.Foreground(t.FgSubtle).Render("●")
+	uptimeText := t.S().Muted.Render(formattedUptime)
+
+	return fmt.Sprintf("%s %s", clockIcon, uptimeText)
 }
 
 // SetSession implements Sidebar.
