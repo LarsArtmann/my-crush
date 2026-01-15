@@ -86,9 +86,9 @@ func New(history history.Service, lspClients *csync.Map[string, *lsp.Client], co
 	return &sidebarCmp{
 		lspClients:  lspClients,
 		history:     history,
-		compactMode:  compact,
-		files:        csync.NewMap[string, SessionFile](),
-		startTime:    time.Now(),
+		compactMode: compact,
+		files:       csync.NewMap[string, SessionFile](),
+		startTime:   time.Now(),
 	}
 }
 

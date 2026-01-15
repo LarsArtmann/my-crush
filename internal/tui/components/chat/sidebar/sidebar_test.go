@@ -208,7 +208,7 @@ func TestUptimeIndicatorDisplay(t *testing.T) {
 	view := sb.View()
 
 	// Then the view should contain an uptime indicator
-	require.Contains(t, view, "●", "uptime indicator should have a clock icon")
+	require.Contains(t, view, styles.ClockIcon, "uptime indicator should have a clock icon")
 
 	// And the view should contain time formatting (contains "m" for minutes or "h" for hours)
 	// Note: The exact format depends on the elapsed time, so we just check for the icon
@@ -239,7 +239,7 @@ func TestUptimeIndicatorPosition(t *testing.T) {
 	modelIdx := findSubstringIndex(view, styles.ModelIcon)
 	require.Greater(t, modelIdx, -1, "model info should be present in view")
 
-	uptimeIdx := findSubstringIndex(view, "●")
+	uptimeIdx := findSubstringIndex(view, styles.ClockIcon)
 	require.Greater(t, uptimeIdx, -1, "uptime indicator should be present in view")
 
 	// Uptime should appear after model info
@@ -280,7 +280,7 @@ func TestUptimeUpdatesOverTime(t *testing.T) {
 
 		// Then the view should update with the new uptime
 		view := sb.View()
-		require.Contains(t, view, "●", "uptime indicator should remain visible after update")
+		require.Contains(t, view, styles.ClockIcon, "uptime indicator should remain visible after update")
 	}
 }
 

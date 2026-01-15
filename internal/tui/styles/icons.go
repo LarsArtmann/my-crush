@@ -13,6 +13,7 @@ const (
 	ImageIcon         string = "■"
 	TextIcon          string = "☰"
 	ModelIcon         string = "◇"
+	ClockIcon         string = "●"
 
 	// Tool call icons
 	ToolPending string = "●"
