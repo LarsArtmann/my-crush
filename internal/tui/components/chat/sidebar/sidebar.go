@@ -13,6 +13,7 @@ import (
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/csync"
 	"github.com/charmbracelet/crush/internal/diff"
+	"github.com/charmbracelet/crush/internal/event"
 	"github.com/charmbracelet/crush/internal/fsext"
 	"github.com/charmbracelet/crush/internal/history"
 	"github.com/charmbracelet/crush/internal/home"
@@ -88,7 +89,7 @@ func New(history history.Service, lspClients *csync.Map[string, *lsp.Client], co
 		history:     history,
 		compactMode: compact,
 		files:       csync.NewMap[string, SessionFile](),
-		startTime:   time.Now(),
+		startTime:   event.AppStartTime(),
 	}
 }
 

@@ -11,6 +11,14 @@ func AppInitialized() {
 	send("app initialized")
 }
 
+// AppStartTime returns the time when the app was initialized.
+// This is set by event.AppInitialized() and should be used
+// for any uptime tracking that needs to start from the actual
+// app start time rather than component creation time.
+func AppStartTime() time.Time {
+	return appStartTime
+}
+
 func AppExited() {
 	duration := time.Since(appStartTime).Truncate(time.Second)
 	send(
